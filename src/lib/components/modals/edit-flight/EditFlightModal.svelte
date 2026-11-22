@@ -131,7 +131,12 @@
           { taint: 'untaint' },
         );
         const track = await api.flightTrack.get.query(flight.id);
-        if (cancelled) return;
+        if (
+          cancelled ||
+          $formData.track === null ||
+          $formData.track?.compressOnImport !== undefined
+        )
+          return;
         formData.update(
           (current) => ({
             ...current,
@@ -209,6 +214,7 @@
     })),
     from: flight.from ?? undefined,
     to: flight.to ?? undefined,
+    track: undefined,
     customFields: {},
     departure: isPartialDate
       ? toFormDateAnchor(flight.raw.date)
@@ -239,7 +245,7 @@
       dataType: 'json',
       id: Math.random().toString(36).substring(7),
       validators: zod(flightFormSchema),
-      onSubmit({ cancel }) {
+      onSubmit({ cancel, jsonData }) {
         $formData.id = flight.id;
         $formData.customFields = toCustomFieldsPayload();
         const flightFieldsValid = customFieldsModal?.validate() ?? true;
@@ -247,6 +253,11 @@
           flightForm?.validatePassengerCustomFields() ?? true;
         if (!flightFieldsValid || !passengerFieldsValid) {
           cancel();
+          return;
+        }
+        const { track, ...values } = $formData;
+        if (track && track.compressOnImport === undefined) {
+          jsonData(values);
         }
       },
       onUpdate({ form }) {
@@ -259,6 +270,14 @@
             return;
           }
           toast.error(form.message.text);
+        }
+        const track = $formData.track;
+        if (
+          form.data.track == null &&
+          track &&
+          track.compressOnImport === undefined
+        ) {
+          form.data.track = track;
         }
       },
     },

@@ -2,10 +2,10 @@ import { airportsFactory } from '@test/factories/airports';
 import { flightsFactory } from '@test/factories/flights';
 import { usersFactory } from '@test/factories/users';
 import { login } from '@test/helpers/auth';
-import { expect, test } from '@test/index';
+import { db, expect, test } from '@test/index';
 
 test.describe('Edit Flight', () => {
-  test('keeps the list position and edit focus after saving', async ({
+  test('keeps edit focus and supports opt-in track replacement', async ({
     page,
   }) => {
     const { user } = await usersFactory.create();
@@ -51,6 +51,24 @@ test.describe('Edit Flight', () => {
         }),
       );
     }
+    const flightId = flights[0]!.flight.id;
+    const originalTrack = await db
+      .insertInto('flightTrack')
+      .values({
+        flightId,
+        track: {
+          coordinates: [
+            [12, 55],
+            [13, 56],
+            [14, 57],
+          ],
+        },
+        sourceFormat: 'csv',
+        sourceName: 'original.csv',
+        pointCount: 3,
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
     await page.goto('/');
     await page.getByTestId('list-flights-button').click();
 
@@ -66,9 +84,7 @@ test.describe('Edit Flight', () => {
       )
       .toBe(true);
 
-    const targetRow = listModal.locator(
-      `#flight-list-row-${flights[0]!.flight.id}`,
-    );
+    const targetRow = listModal.locator(`#flight-list-row-${flightId}`);
     await targetRow.scrollIntoViewIfNeeded();
     const editButton = targetRow.getByRole('button', {
       name: 'Edit flight',
@@ -96,6 +112,13 @@ test.describe('Edit Flight', () => {
     await expect(editModal).not.toBeVisible();
     await expect(targetRow.getByText('AT693')).toBeVisible();
     await expect(editButton).toBeFocused();
+    expect(
+      await db
+        .selectFrom('flightTrack')
+        .selectAll()
+        .where('flightId', '=', flightId)
+        .executeTakeFirstOrThrow(),
+    ).toEqual(originalTrack);
 
     const scrollAfterSave = await listModal.evaluate(
       (element) => element.scrollTop,
@@ -107,5 +130,49 @@ test.describe('Edit Flight', () => {
     await expect(
       editModal.getByRole('textbox', { name: 'Flight Number' }),
     ).toHaveValue('AT693');
+
+    const trackButton = editModal.getByRole('button', { name: 'Flight track' });
+    await trackButton.click();
+    const trackModal = page.getByRole('dialog').filter({
+      has: page.getByRole('heading', { name: 'Flight Track', exact: true }),
+    });
+    const compression = trackModal.getByRole('checkbox', {
+      name: 'Compress track when importing',
+    });
+    await expect(trackModal.getByText('original.csv')).toBeVisible();
+    await expect(compression).toBeDisabled();
+    await trackModal.locator('input[type="file"]').setInputFiles({
+      name: 'replacement.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('latitude,longitude\n0,10\n0,11\n0,12\n0,13\n0,14'),
+    });
+    await expect(compression).toBeEnabled();
+    await expect(compression).not.toBeChecked();
+    await compression.click();
+    await expect(compression).toBeChecked();
+    await trackModal.getByRole('button', { name: 'Done' }).click();
+
+    await trackButton.click();
+    await compression.click();
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Discard', exact: true }).click();
+    await expect(trackModal).not.toBeVisible();
+    await trackButton.click();
+    await expect(compression).toBeChecked();
+    await trackModal.getByRole('button', { name: 'Done' }).click();
+
+    await editModal.getByRole('button', { name: 'Save' }).click();
+    await expect(editModal).not.toBeVisible();
+    expect(
+      await db
+        .selectFrom('flightTrack')
+        .selectAll()
+        .where('flightId', '=', flightId)
+        .executeTakeFirstOrThrow(),
+    ).toMatchObject({
+      sourceName: 'replacement.csv',
+      pointCount: 2,
+      track: { storageCompression: { originalPointCount: 5 } },
+    });
   });
 });

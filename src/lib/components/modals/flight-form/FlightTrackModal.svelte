@@ -5,6 +5,8 @@
 
   import { page } from '$app/state';
   import { Button } from '$lib/components/ui/button';
+  import { Checkbox } from '$lib/components/ui/checkbox';
+  import { Label } from '$lib/components/ui/label';
   import { Modal, ModalBody, ModalHeader } from '$lib/components/ui/modal';
   import { findAutomaticTrackCandidate } from '$lib/track/candidates';
   import {
@@ -37,12 +39,12 @@
   } = $props();
 
   const { form: formData } = form;
+  const compressionId = $props.id();
 
   let open = $state(false);
   let fileInput: HTMLInputElement | null = $state(null);
   let parsing = $state(false);
   let error: string | null = $state(null);
-  let originalPointCount: number | null = $state(null);
   let trackCandidates: ParsedTrackCandidate[] = $state([]);
   let formSnapshot = $state.raw<ReturnType<typeof form.capture> | null>(null);
   let filledTimes = $state<Partial<FlightFormData>>({});
@@ -100,6 +102,7 @@
     return {
       name: track.sourceName ?? `${track.sourceFormat.toUpperCase()} track`,
       points: track.coordinates.length,
+      originalPointCount: track.storageCompression?.originalPointCount,
       altitudePoints,
       hasTimes: Boolean(track.times?.length),
       hasGroundSpeed: Boolean(track.groundSpeedKt?.length),
@@ -145,10 +148,11 @@
   };
 
   const applyCandidate = (candidate: ParsedTrackCandidate) => {
-    const { originalPointCount: count, ...trackInput } = candidate.track;
-    originalPointCount = count;
+    const { originalPointCount: _originalPointCount, ...trackInput } =
+      candidate.track;
     trackCandidates = [];
-    setTrack(trackInput);
+    // Only a pending upload carries a compression choice.
+    setTrack({ ...trackInput, compressOnImport: false });
     metadata = candidate.metadata ?? null;
     // A track from another route shouldn't fill this flight's times. A flight
     // number mismatch alone can be a codeshare, so it only warns.
@@ -263,7 +267,6 @@
 
     parsing = true;
     error = null;
-    originalPointCount = null;
     trackCandidates = [];
 
     try {
@@ -326,7 +329,6 @@
     filledTimes = { ...filledTimesSnapshot };
     metadata = metadataSnapshot;
     error = null;
-    originalPointCount = null;
     trackCandidates = [];
   }}
   class="max-w-md"
@@ -387,7 +389,7 @@
         </div>
       {/if}
 
-      {#if trackSummary}
+      {#if trackSummary && track}
         {#if filledTimesNote}
           <p role="status" class="text-sm text-muted-foreground">
             {filledTimesNote}
@@ -430,8 +432,8 @@
               </div>
               <p class="mt-0.5 text-xs text-muted-foreground tabular-nums">
                 {trackSummary.points} points
-                {#if originalPointCount && originalPointCount !== trackSummary.points}
-                  from {originalPointCount}
+                {#if trackSummary.originalPointCount}
+                  from {trackSummary.originalPointCount}
                 {/if}
                 {#if trackSummary.altitudePoints}
                   &middot; altitude
@@ -459,7 +461,6 @@
               size="icon-sm"
               class="shrink-0 self-center"
               onclick={() => {
-                originalPointCount = null;
                 trackCandidates = [];
                 setTrack(null);
               }}
@@ -467,6 +468,28 @@
             >
               <Trash2 size={14} />
             </Button>
+          </div>
+        </div>
+        <div class="flex items-start gap-2">
+          <Checkbox
+            id={compressionId}
+            checked={track.compressOnImport ?? false}
+            disabled={parsing || track.compressOnImport === undefined}
+            aria-describedby={`${compressionId}-description`}
+            onCheckedChange={(checked) => {
+              if ($formData.track) $formData.track.compressOnImport = checked;
+            }}
+          />
+          <div class="space-y-0.5">
+            <Label for={compressionId}>Compress track when importing</Label>
+            <p
+              id={`${compressionId}-description`}
+              class="text-xs text-muted-foreground"
+            >
+              Reduce the number of stored points while preserving the track's
+              shape. This permanently removes some original points and
+              <strong class="font-semibold">cannot be undone</strong>.
+            </p>
           </div>
         </div>
       {:else}

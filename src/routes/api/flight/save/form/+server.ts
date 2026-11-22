@@ -12,7 +12,11 @@ import { flightFormSchema } from '$lib/zod/flight';
 
 export const POST: RequestHandler = async ({ locals, request }) => {
   const formData = await request.formData();
-  const form = await superValidate(formData, zod(flightFormSchema));
+  const adapter = zod(flightFormSchema);
+  const form = await superValidate(formData, adapter, {
+    // Superforms defaults optional nullable fields to null, which deletes a track.
+    defaults: { ...adapter.defaults, track: undefined },
+  });
   if (!form.valid) {
     return actionResult('failure', { form });
   }

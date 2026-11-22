@@ -46,7 +46,7 @@ A readsb trace can cover several flights by the same aircraft. AirTrail picks a 
 
 The summary shows the file name, the format, the number of points, and which extra data the file contains: altitude, timestamps, speed, heading, ground flags, and uncertainty flags.
 
-The track is stored when the flight is saved. Closing the form without saving discards it.
+The track is stored when the flight is saved. To reduce the number of stored points, select **Compress track when importing** below the summary before saving. The option is off by default and applies to the file you just uploaded or replaced. Compression permanently discards some observations after flight leg selection and time detection. Closing the form without saving discards the pending upload.
 
 ### Takeoff and landing times
 
@@ -78,12 +78,12 @@ While a flight's or a route's details pane is open, an action button in the pane
 
 Segments that were estimated or had gaps in the source data are drawn dashed. With the **Altitude** style, segments on the ground are drawn with an outline.
 
-The map draws at most 5,000 points per track. Longer tracks are simplified for display while keeping turns, altitude changes, and ground transitions. The full track stays stored.
+The map simplifies tracks for display while keeping turns, altitude changes, ground observations, and gaps. If the display geometry still exceeds 50,000 points, the map skips the track and falls back to the airport-to-airport arc. Display simplification leaves the stored points intact.
 
 ## Exports, imports, and shares
 
-- The AirTrail JSON and YAML [exports](/docs/features/export) include the full track of each flight. The CSV export does not.
-- Importing an AirTrail JSON export restores the tracks.
+- The AirTrail JSON and YAML [exports](/docs/features/export) include all stored points for each track. The CSV export does not.
+- Importing an AirTrail JSON export restores the tracks as exported.
 - [Public shares](/docs/features/sharing) show tracks only when **Show Map** and **Show Exact Tracks** are both enabled. Track timestamps are included only when **Show Flight Times** is enabled.
 
 ## API
@@ -111,6 +111,8 @@ The API does not parse files. `PUT` takes an already-parsed track:
 ```
 
 Each coordinate is `[longitude, latitude]` or `[longitude, latitude, altitude]`, with altitude in meters. `sourceFormat` is one of `gpx`, `kml`, `csv`, or `readsb`. The optional arrays `times` (Unix seconds), `groundSpeedKt`, `trackDeg`, `ground`, and `estimated` must have one entry per coordinate.
+
+Set the optional `compressOnImport` boolean to `true` to compress the track before saving. `pointCount` reports the number of stored coordinates. When compression removes points, `storageCompression.originalPointCount` records the number before compression.
 
 You can also send a `track` object when creating or updating a flight with `POST /api/v1/flights` or `PUT /api/v1/flights/{id}`. This needs the `tracks.write` scope. On update, omitting `track` keeps the current track and `"track": null` deletes it.
 
