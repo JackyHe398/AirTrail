@@ -104,6 +104,15 @@ const flightTrackPayloadBaseSchema = z.object({
     .min(2)
     .max(MAX_STORED_FLIGHT_TRACK_POINTS),
   ...flightTrackAlignedPropertySchemas,
+  storageCompression: z
+    .object({
+      originalPointCount: z
+        .number()
+        .int()
+        .min(3)
+        .max(MAX_STORED_FLIGHT_TRACK_POINTS),
+    })
+    .optional(),
 });
 
 const hasAlignedTrackProperties = (
@@ -114,20 +123,25 @@ const hasAlignedTrackProperties = (
     return values === undefined || values.length === track.coordinates.length;
   });
 
-export const flightTrackPayloadSchema = flightTrackPayloadBaseSchema.refine(
-  hasAlignedTrackProperties,
-  'Track properties must align with coordinates',
-);
-
-export const flightTrackInputSchema = flightTrackPayloadBaseSchema
-  .extend({
-    sourceFormat: z.enum(flightTrackSourceFormats),
-    sourceName: z.string().max(255).nullable().optional(),
-  })
+export const flightTrackPayloadSchema = flightTrackPayloadBaseSchema
   .refine(
     hasAlignedTrackProperties,
     'Track properties must align with coordinates',
+  )
+  .refine(
+    ({ coordinates, storageCompression }) =>
+      !storageCompression ||
+      storageCompression.originalPointCount > coordinates.length,
+    {
+      path: ['storageCompression', 'originalPointCount'],
+      message: 'Original point count must exceed the stored point count',
+    },
   );
+
+export const flightTrackInputSchema = flightTrackPayloadSchema.safeExtend({
+  sourceFormat: z.enum(flightTrackSourceFormats),
+  sourceName: z.string().max(255).nullable().optional(),
+});
 
 export type FlightTrackSourceFormat = (typeof flightTrackSourceFormats)[number];
 export type FlightTrackCoordinate = z.infer<typeof flightTrackCoordinateSchema>;
@@ -143,7 +157,10 @@ export type FlightTrackAlignedProperties = Pick<
   FlightTrackAlignedPropertyKey
 >;
 
-type FlightTrackPayloadSource = Pick<FlightTrackPayload, 'coordinates'> &
+type FlightTrackPayloadSource = Pick<
+  FlightTrackPayload,
+  'coordinates' | 'storageCompression'
+> &
   FlightTrackAlignedProperties;
 
 type FlightTrackCopyOptions = {
@@ -246,6 +263,9 @@ export const toFlightTrackPayload = (
 ): FlightTrackPayload => ({
   coordinates: track.coordinates,
   ...copyFlightTrackAlignedProperties(track, options),
+  ...(track.storageCompression && {
+    storageCompression: track.storageCompression,
+  }),
 });
 
 export const toFlightTrackInput = (

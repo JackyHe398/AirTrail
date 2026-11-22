@@ -110,7 +110,8 @@ export const buildFlightTrackPaths = (
       ...arc,
       flightId: track.flightId,
       samples: toFlightTrackSamples(track),
-      originalPointCount: track.pointCount,
+      originalPointCount:
+        track.storageCompression?.originalPointCount ?? track.pointCount,
     });
   }
 

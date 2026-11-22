@@ -1,8 +1,15 @@
 import { distance, lineString, nearestPointOnLine } from '@turf/turf';
 import { describe, expect, it } from 'vitest';
 
-import { reduceFlightTrackForMap } from './render';
-import type { FlightTrackCoordinate, FlightTrackPayload } from './schema';
+import {
+  compressFlightTrackForStorage,
+  reduceFlightTrackForMap,
+} from './render';
+import {
+  flightTrackPayloadSchema,
+  type FlightTrackCoordinate,
+  type FlightTrackPayload,
+} from './schema';
 
 const groundDistance = (
   left: FlightTrackCoordinate,
@@ -126,6 +133,27 @@ describe('flight track map reduction', () => {
       true,
       false,
     ]);
+  });
+
+  it('keeps a continuous span solid after storage reduction and reload', () => {
+    const times = Array.from({ length: 101 }, (_, index) => index);
+    const track: FlightTrackPayload = {
+      coordinates: times.map((time) => [time / 1_000, 0]),
+      times,
+    };
+    const rendered = reduceFlightTrackForMap(track);
+    const compressed = compressFlightTrackForStorage(track);
+    const reloaded = flightTrackPayloadSchema.parse(
+      JSON.parse(JSON.stringify(compressed)),
+    );
+
+    expect(rendered.times).toEqual([0, 100]);
+    expect(rendered.estimated).toBeUndefined();
+    expect(reloaded).toEqual({
+      ...rendered,
+      storageCompression: { originalPointCount: 101 },
+    });
+    expect(reduceFlightTrackForMap(reloaded)).toEqual(reloaded);
   });
 
   it('keeps altitude extrema and semantic transitions', () => {

@@ -44,6 +44,7 @@ describe('flight track layer data', () => {
         estimated: [false, true],
         sourceFormat: 'kml',
         pointCount: 2,
+        storageCompression: { originalPointCount: 4 },
       },
     ] as FlightTrackRow[];
 
@@ -52,6 +53,7 @@ describe('flight track layer data', () => {
     expect(paths).toMatchObject([
       {
         flightId: 7,
+        originalPointCount: 4,
         samples: [
           {
             coordinate: [10, 55, 0],

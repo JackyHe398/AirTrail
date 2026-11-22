@@ -116,21 +116,22 @@ const altitudeError = (
   return Math.abs(altitude - (start * (1 - progress) + end * progress));
 };
 
-export const reduceFlightTrackForMap = (
-  track: FlightTrackPayload,
-): FlightTrackPayload => {
+const reduceFlightTrack = (track: FlightTrackPayload): FlightTrackPayload => {
   const samples = toFlightTrackSamples(track);
-  const renderSamples = materializeEstimatedGaps(samples);
+  // Storage compression classified gaps before discarding observations.
+  const classifiedSamples = track.storageCompression
+    ? samples
+    : materializeEstimatedGaps(samples);
   if (samples.length < 2) return track;
 
-  const mandatory = collectMandatoryIndices(renderSamples);
+  const mandatory = collectMandatoryIndices(classifiedSamples);
   const spans = spansBetween(mandatory).filter(
     ([start, end]) => end - start > 1,
   );
   if (!spans.length) {
-    return renderSamples === samples
+    return classifiedSamples === samples
       ? track
-      : fromFlightTrackSamples(renderSamples);
+      : fromFlightTrackSamples(classifiedSamples);
   }
 
   const vectors = samples.map(({ coordinate: [lon, lat] }) =>
@@ -223,9 +224,29 @@ export const reduceFlightTrackForMap = (
     findWorstPoint(start, end, 'combined'),
   );
 
-  if (selected.size === samples.length && renderSamples === samples)
+  if (selected.size === samples.length && classifiedSamples === samples)
     return track;
-  return fromFlightTrackSamples(
-    [...selected].sort((a, b) => a - b).map((index) => renderSamples[index]!),
-  );
+  const retainedSamples = [...selected]
+    .sort((a, b) => a - b)
+    .map((index) => classifiedSamples[index]!);
+  return {
+    ...fromFlightTrackSamples(retainedSamples),
+    ...(track.storageCompression && {
+      storageCompression: track.storageCompression,
+    }),
+  };
+};
+
+export const reduceFlightTrackForMap = reduceFlightTrack;
+
+export const compressFlightTrackForStorage = (
+  track: FlightTrackPayload,
+): FlightTrackPayload => {
+  if (track.storageCompression) return track;
+  const reduced = reduceFlightTrack(track);
+  if (reduced.coordinates.length === track.coordinates.length) return track;
+  return {
+    ...reduced,
+    storageCompression: { originalPointCount: track.coordinates.length },
+  };
 };
