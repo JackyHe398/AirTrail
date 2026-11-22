@@ -13,7 +13,7 @@ import {
   processLegacyAirTrailData,
 } from '$lib/import/legacy-airtrail';
 import type { PlatformOptions } from '$lib/import/model';
-import { flightTrackInputSchema } from '$lib/track/schema';
+import { storedFlightTrackSchema } from '$lib/track/schema';
 import { api } from '$lib/trpc';
 import { getAircraftByIcao, getAircraftByName } from '$lib/utils/data/aircraft';
 import { getAirlineByIcao, getAirlineByName } from '$lib/utils/data/airlines';
@@ -96,7 +96,7 @@ const airTrailFlightSchema = z.preprocess(
       duration: z.number().int().positive().nullable(),
       airline: airlineRefSchema,
       aircraft: aircraftRefSchema,
-      track: flightTrackInputSchema.nullable().optional(),
+      track: storedFlightTrackSchema.nullable().optional(),
     })
     .merge(
       flightOptionalInformationSchema.omit({ airline: true, aircraft: true }),

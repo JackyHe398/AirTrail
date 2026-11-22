@@ -4,6 +4,7 @@ import { jsonArrayFrom, jsonObjectFrom } from 'kysely/helpers/postgres';
 import type { DB } from './schema';
 import type { CreateFlight, CreateFlightPassenger } from './types';
 
+import { compressFlightTrackForStorage } from '$lib/track/render';
 import {
   flightTrackInputSchema,
   toFlightTrackPayload,
@@ -379,33 +380,37 @@ export const updateFlightPrimitiveWithConnection = async (
   return persistedPassengers;
 };
 
-const normalizeFlightTrackInput = (track: FlightTrackInput): FlightTrackInput =>
-  flightTrackInputSchema.parse(track);
+const prepareFlightTrackForStorage = (input: FlightTrackInput) => {
+  const track = flightTrackInputSchema.parse(input);
+  const payload = toFlightTrackPayload(track);
+  const stored = track.compressOnImport
+    ? compressFlightTrackForStorage(payload)
+    : payload;
+  return {
+    track: stored,
+    sourceFormat: track.sourceFormat,
+    sourceName: track.sourceName ?? null,
+    pointCount: stored.coordinates.length,
+  };
+};
 
 export const upsertFlightTrackPrimitiveWithConnection = async (
   db: Kysely<DB>,
   flightId: number,
   track: FlightTrackInput,
 ) => {
-  const validTrack = normalizeFlightTrackInput(track);
-  const payload = toFlightTrackPayload(validTrack);
+  const values = prepareFlightTrackForStorage(track);
 
   await db
     .insertInto('flightTrack')
     .values({
       flightId,
-      track: payload,
-      sourceFormat: validTrack.sourceFormat,
-      sourceName: validTrack.sourceName ?? null,
-      pointCount: validTrack.coordinates.length,
+      ...values,
       updatedAt: new Date(),
     })
     .onConflict((oc) =>
       oc.column('flightId').doUpdateSet({
-        track: payload,
-        sourceFormat: validTrack.sourceFormat,
-        sourceName: validTrack.sourceName ?? null,
-        pointCount: validTrack.coordinates.length,
+        ...values,
         updatedAt: sql`CURRENT_TIMESTAMP`,
       }),
     )
@@ -473,17 +478,12 @@ export const createManyFlightsPrimitive = async (
     await trx.insertInto('flightPassenger').values(passengerData).execute();
 
     const trackData = flights.flatMap((flight, index) => {
-      const track = data[index]?.track
-        ? normalizeFlightTrackInput(data[index].track)
-        : null;
+      const track = data[index]?.track;
       if (!track) return [];
       return [
         {
           flightId: flight.id,
-          track: toFlightTrackPayload(track),
-          sourceFormat: track.sourceFormat,
-          sourceName: track.sourceName ?? null,
-          pointCount: track.coordinates.length,
+          ...prepareFlightTrackForStorage(track),
           updatedAt: new Date(),
         },
       ];

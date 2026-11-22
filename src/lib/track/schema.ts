@@ -138,16 +138,21 @@ export const flightTrackPayloadSchema = flightTrackPayloadBaseSchema
     },
   );
 
-export const flightTrackInputSchema = flightTrackPayloadSchema.safeExtend({
+export const storedFlightTrackSchema = flightTrackPayloadSchema.safeExtend({
   sourceFormat: z.enum(flightTrackSourceFormats),
   sourceName: z.string().max(255).nullable().optional(),
+});
+
+export const flightTrackInputSchema = storedFlightTrackSchema.safeExtend({
+  compressOnImport: z.boolean().optional(),
 });
 
 export type FlightTrackSourceFormat = (typeof flightTrackSourceFormats)[number];
 export type FlightTrackCoordinate = z.infer<typeof flightTrackCoordinateSchema>;
 export type FlightTrackPayload = z.infer<typeof flightTrackPayloadSchema>;
 export type FlightTrackInput = z.infer<typeof flightTrackInputSchema>;
-export type FlightTrackRow = FlightTrackInput & {
+export type StoredFlightTrack = z.infer<typeof storedFlightTrackSchema>;
+export type FlightTrackRow = StoredFlightTrack & {
   flightId: number;
   pointCount: number;
 };
@@ -274,7 +279,7 @@ export const toFlightTrackInput = (
     sourceName?: string | null;
   },
   options?: FlightTrackCopyOptions,
-): FlightTrackInput => ({
+): StoredFlightTrack => ({
   ...toFlightTrackPayload(track, options),
   sourceFormat: track.sourceFormat,
   sourceName: track.sourceName,

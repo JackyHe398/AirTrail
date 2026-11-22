@@ -3,7 +3,7 @@ import { db } from '$lib/db';
 import type { Flight } from '$lib/db/types';
 import {
   flightTrackPayloadSchema,
-  type FlightTrackInput,
+  type StoredFlightTrack,
 } from '$lib/track/schema';
 import { omit } from '$lib/utils/other';
 import { listFlightsInScope } from '$lib/server/utils/flight';
@@ -91,7 +91,7 @@ export const generateBackup = async (scope: ResolvedFlightScope) => {
           .where('flightId', 'in', flightIds)
           .execute()
       : [];
-  const tracksByFlight = new Map<number, FlightTrackInput>(
+  const tracksByFlight = new Map<number, StoredFlightTrack>(
     trackRows.map((row) => {
       const track = flightTrackPayloadSchema.parse(row.track);
       return [

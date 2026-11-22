@@ -1215,6 +1215,7 @@ components:
       properties:
         pointCount:
           type: integer
+          description: Number of stored coordinates.
         updatedAt:
           type: string
           format: date-time
@@ -1272,6 +1273,11 @@ components:
               minimum: 3
               maximum: 100000
               description: Number of points before storage compression. Must exceed the number of stored coordinates.
+        compressOnImport:
+          type: boolean
+          writeOnly: true
+          default: false
+          description: Reduce the number of stored coordinates before saving. Discarded observations cannot be recovered.
     Track:
       allOf:
         - $ref: '#/components/schemas/TrackInput'
@@ -1282,6 +1288,7 @@ components:
               type: integer
             pointCount:
               type: integer
+              description: Number of stored coordinates.
             createdAt:
               type: string
               format: date-time

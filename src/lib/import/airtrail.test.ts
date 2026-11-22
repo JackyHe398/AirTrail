@@ -152,6 +152,15 @@ describe('processAirTrailFile', () => {
   });
 
   it('imports later v3 JSON exports with nested airport, airline, and aircraft objects', async () => {
+    const track = {
+      sourceFormat: 'gpx',
+      coordinates: [
+        [0, 0],
+        [1, 0],
+      ],
+      times: [0, 100],
+      storageCompression: { originalPointCount: 101 },
+    };
     const content = JSON.stringify({
       schemaVersion: BACKUP_SCHEMA_VERSION,
       users: exportedUsers,
@@ -176,6 +185,7 @@ describe('processAirTrailFile', () => {
           takeoffActual: null,
           landingScheduled: null,
           landingActual: '2024-06-14T11:58:00.000Z',
+          track: { ...track, compressOnImport: true },
         },
       ],
     });
@@ -194,6 +204,7 @@ describe('processAirTrailFile', () => {
     expect(flight.datePrecision).toBe('month');
     expect(flight.departureScheduled).toBe('2024-06-14T09:45:00.000Z');
     expect(flight.landingActual).toBe('2024-06-14T11:58:00.000Z');
+    expect(flight.track).toEqual(track);
     expect(flight.passengers).toEqual([
       {
         ...seat,
